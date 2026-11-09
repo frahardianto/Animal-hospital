@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Anomaly Hospital</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        /* HUD Top Bar */
+        #hud-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .hud-card {
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 10px 15px;
+            backdrop-filter: blur(4px);
+        }
+        #sanity-bar-container {
+            width: 200px;
+            height: 20px;
+            background: #222;
+            border: 2px solid #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        #sanity-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff3333, #33ff33);
+            transition: width 0.2s;
+        }
+        /* Crosshair & Prompts */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border: 1px solid #000;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        #interaction-prompt {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: #ffeb3b;
+            border: 2px solid #ffeb3b;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 16px;
+            font-weight: bold;
+            display: none;
+            text-align: center;
+            box-shadow: 0 0 10px rgba(255, 235, 59, 0.5);
+        }
+        #warning-banner {
+            position: absolute;
+            top: 25%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff1111;
+            font-size: 32px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            display: none;
+            text-shadow: 0 0 10px #ff0000, 0 0 20px #000;
+            animation: pulse 0.5s infinite alternate;
+        }
+        @keyframes pulse {
+            from { opacity: 0.6; transform: translate(-50%, -50%) scale(0.98); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+        }
+        /* Mobile Touch Controls */
+        #touch-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            height: 150px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        #joystick-zone {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px dashed rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            position: relative;
+            touch-action: none;
+        }
+        #joystick-knob {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            position: absolute;
+            top: 35px;
+            left: 35px;
+            pointer-events: none;
+        }
+        #action-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            max-width: 220px;
+            justify-content: flex-end;
+        }
+        .btn-touch {
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #fff;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            active { background: rgba(255, 255, 255, 0.4); }
+        }
+        /* Menus & Dialog Overlay */
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 15, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: #fff;
+        }
+        .menu-title {
+            font-size: 48px;
+            font-weight: 900;
+            color: #ff3333;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 15px rgba(255, 51, 51, 0.6);
+        }
+        .menu-btn {
+            background: #222;
+            color: #fff;
+            border: 2px solid #ff3333;
+            padding: 12px 36px;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            pointer-events: auto;
+            min-width: 200px;
+            text-align: center;
+        }
+        .menu-btn:hover {
+            background: #ff3333;
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.8);
+        }
+        /* Computer Interface Screen */
+        #pc-interface {
+            width: 80%;
+            max-width: 800px;
+            height: 80%;
+            background: #1a1a24;
+            border: 4px solid #334;
+            border-radius: 12px;
+            display: none;
+            flex-direction: column;
+            padding: 20px;
+            z-index: 50;
+            color: #fff;
+            box-shadow: 0 0 30px rgba(0,0,0,0.9);
+        }
+        .pc-header {
+            background: #2a2a3a;
+            padding: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 2px solid #445;
+            display: flex;
+            justify-content: space-between;
+        }
+        .pc-body {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .pc-cam-view {
+            flex: 1;
+            background: #000;
+            border: 2px solid #556;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .pc-controls {
+            width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        /* Polaroid Modal Visual */
+        #polaroid-view {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 260px;
+            height: 320px;
+            background: #fff;
+            padding: 15px 15px 50px 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            z-index: 60;
+        }
+        #polaroid-img {
+            width: 100%;
+            height: 220px;
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #polaroid-label {
+            color: #222;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        /* Inventory Container */
+        #inventory-bar {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 6px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .inv-slot {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #666;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 10px;
+            color: #fff;
+            text-align: center;
+            word-break: break-word;
+        }
+        .inv-slot.active {
+            border-color: #ffeb3b;
+            box-shadow: 0 0 8px #ffeb3b;
+        }
+    </style>
+    <!-- Three.js Engine & PointerLockControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay Layer -->
+    <div id="ui-layer">
+        <div id="hud-top">
+            <div class="hud-card">
+                <div id="shift-display">SHIFT 1</div>
+                <div style="font-size: 12px; color: #aaa;">OBJECTIVE: Check in incoming patients</div>
+                <div style="font-size: 11px; color: #ffeb3b; margin-top: 3px;" id="objective-text">Go to Registration Desk</div>
+            </div>
+            <div class="hud-card" style="text-align: right;">
+                <div>SANITY</div>
+                <div id="sanity-bar-container">
+                    <div id="sanity-bar"></div>
+                </div>
+                <div style="font-size: 11px; margin-top:4px;" id="strikes-display">SAFETY STRIKES: ❤️❤️❤️</div>
+            </div>
+        </div>
+
+        <div id="crosshair"></div>
+        <div id="interaction-prompt">Press [E] to Interact</div>
+        <div id="warning-banner">DON'T LOOK UP</div>
+
+        <!-- Inventory Hotbar -->
+        <div id="inventory-bar" class="interactive">
+            <div class="inv-slot active" id="slot-0">Empty</div>
+            <div class="inv-slot" id="slot-1">Empty</div>
+            <div class="inv-slot" id="slot-2">Empty</div>
+        </div>
+
+        <!-- Touch Controls for Mobile/Tablet -->
+        <div id="touch-controls">
+            <div id="joystick-zone" class="interactive">
+                <div id="joystick-knob"></div>
+            </div>
+            <div id="action-buttons" class="interactive">
+                <div class="btn-touch" id="btn-interact">INTERACT<br>[E]</div>
+                <div class="btn-touch" id="btn-run">RUN</div>
+                <div class="btn-touch" id="btn-use">USE/FIRE</div>
+                <div class="btn-touch" id="btn-flash">LIGHT<br>[F]</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Menu Screen -->
+    <div id="main-menu" class="overlay-screen">
+        <div class="menu-title">ANOMALY HOSPITAL</div>
+        <div style="margin-bottom: 25px; color: #aaa; text-align: center; max-width: 500px;">
+            Inspect incoming animal patients. Catch anomalies using CCTV, Snapshots, and UV scans. Treat patients and survive all 12 shifts!
+        </div>
+        <button class="menu-btn" id="btn-start">START GAME (SHIFT 1)</button>
+        <button class="menu-btn" id="btn-guide" style="border-color: #555;">HOW TO PLAY</button>
+    </div>
+
+    <!-- Shift Complete Summary Overlay -->
+    <div id="summary-menu" class="overlay-screen" style="display: none;">
+        <div class="menu-title" style="color: #4caf50;">SHIFT COMPLETED</div>
+        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin: 15px 0; min-width: 300px;" id="summary-stats">
+            <div>Patients Recovered: <span id="stat-recovered">0</span></div>
+            <div>Patients Declined: <span id="stat-declined">0</span></div>
+            <div>Safety Failures/Deaths: <span id="stat-deaths">0</span></div>
+            <hr style="margin: 10px 0; border-color: #444;">
+            <div style="color: #ffeb3b;">Top Employee: Player 1</div>
+        </div>
+        <button class="menu-btn" id="btn-next-shift">BEGIN NEXT SHIFT</button>
+    </div>
+
+    <!-- Computer Desktop UI Interface -->
+    <div id="pc-interface" class="interactive">
+        <div class="pc-header">
+            <span>RECEPTION TERMINAL v4.02 - ANOMALY DETECTOR</span>
+            <button id="btn-close-pc" style="background:#f44336; border:none; color:#fff; padding:2px 8px; cursor:pointer;">X</button>
+        </div>
+        <div class="pc-body">
+            <div class="pc-cam-view" id="cam-feed-container">
+                <div id="cam-status" style="position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace;">● CAM 01 - RECEPTION LOBBY</div>
+                <div id="cam-patient-preview" style="width: 120px; height: 160px; background: #333; border-radius: 60px 60px 20px 20px; position: relative;">
+                    <div id="cam-eyes" style="position: absolute; top: 40px; width: 100%; display: flex; justify-content: space-around; padding: 0 20px;">
+                        <div style="width: 20px; height: 20px; background: #000; border-radius: 50%;"></div>
+                        <div style="width: 20px; height: 20px; background: #000; border-radius: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="pc-controls">
+                <button class="menu-btn" id="btn-take-photo" style="font-size: 14px; margin: 0; min-width: auto;">📷 TAKE POLAROID PHOTO</button>
+                <button class="menu-btn" id="btn-print-tag" style="font-size: 14px; margin: 0; min-width: auto; border-color: #2196F3;">🖨️ CONFIRM & PRINT TAG</button>
+                <button class="menu-btn" id="btn-decline-patient" style="font-size: 14px; margin: 0; min-width: auto; border-color: #f44336;">⛔ DECLINE PATIENT</button>
+                <div style="font-size: 12px; color: #888; margin-top: 10px; line-height: 1.4;">
+                    * Check for eyes distortion in CCTV or Polaroid printouts before issuing tag!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Polaroid Photo Snapshot Card View -->
+    <div id="polaroid-view" class="interactive">
+        <div id="polaroid-img">
+            <div id="pol-face" style="width: 100px; height: 140px; background: #888; border-radius: 50px 50px 20px 20px; position: relative;">
+                <div id="pol-eyes" style="position: absolute; top: 35px; width: 100%; display: flex; justify-content: space-around; padding: 0 15px;">
+                    <div class="pol-eye" style="width: 18px; height: 18px; background: #000; border-radius: 50%;"></div>
+                    <div class="pol-eye" style="width: 18px; height: 18px; background: #000; border-radius: 50%;"></div>
+                </div>
+            </div>
+        </div>
+        <div id="polaroid-label">PATIENT SNAPSHOT</div>
+        <button id="btn-close-pol" style="margin-top: 15px; padding: 4px 12px; cursor: pointer;">CLOSE</button>
+    </div>
+
+    <script>
+        /* =========================================================================
+           1. GAME STATE & SYSTEM CONFIGURATION
+           ========================================================================= */
+        const CONFIG = {
+            colors: {
+                pink: 0xffb6c1, purple: 0x9370db, blue: 0x87ceeb, green: 0x98fb98,
+                yellow: 0xffefd5, peach: 0xffdab9, white: 0xf8f8ff, teal: 0x008080
+            },
+            palette: [0xffb6c1, 0x9370db, 0x87ceeb, 0x98fb98, 0xffefd5, 0xffdab9, 0xf8f8ff, 0x008080],
+            medicines: [
+                "Pill Bottle", "Herbs", "Cough Syrup", "Maple Syrup", 
+                "Medkit", "Thermometer", "IV Drops", "Eye Drops", "Ointment", "Bandages"
+            ]
+        };
+
+        let state = {
+            shift: 1,
+            sanity: 100,
+            strikes: 3,
+            currentObjective: "Proceed to Registration Counter",
+            inGame: false,
+            milkCooldown: 0,
+            taserCooldown: 0,
+            inventory: [null, null, null],
+            activeSlot: 0,
+            stats: { recovered: 0, declined: 0, deaths: 0 },
+            currentPatient: null,
+            patientQueue: [],
+            isShiftActive: false,
+            isBlackout: false,
+            uvMode: false,
+            ceilingMonsterActive: false,
+            bedMonsterActive: false,
+            slimebertActive: false,
+            isFired: false
+        };
+
+        /* =========================================================================
+           2. THREE.JS SCENE SETUP & ENGINE INITIALIZATION
+           ========================================================================= */
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a10);
+        scene.fog = new THREE.FogExp2(0x0a0a10, 0.03);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Lighting Architecture
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        scene.add(ambientLight);
+
+        const flashlight = new THREE.SpotLight(0xffffff, 1.5, 20, Math.PI / 6, 0.5, 1);
+        camera.add(flashlight);
+        flashlight.position.set(0, 0, 0);
+        flashlight.target.position.set(0, 0, -1);
+        camera.add(flashlight.target);
+        scene.add(camera);
+
+        // World Hierarchy Groups
+        const worldGroup = new THREE.Group();
+        const interactablesGroup = new THREE.Group();
+        const patientsGroup = new THREE.Group();
+        scene.add(worldGroup);
+        scene.add(interactablesGroup);
+        scene.add(patientsGroup);
+
+        /* =========================================================================
+           3. MAP ARCHITECTURE BUILDER (HOSPITAL LAYOUT)
+           ========================================================================= */
+        function createWall(x, z, width, depth, height = 4, color = 0xdcdde1) {
+            const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4 });
+            const geo = new THREE.BoxGeometry(width, height, depth);
+            const wall = new THREE.Mesh(geo, mat);
+            wall.position.set(x, height / 2, z);
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            worldGroup.add(wall);
+            return wall;
+        }
+
+        function buildHospitalMap() {
+            // Main Floor
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x333344, roughness: 0.2 });
+            const floorGeo = new THREE.PlaneGeometry(60, 60);
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            worldGroup.add(floor);
+
+            // Ceiling
+            const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+            const ceilingGeo = new THREE.PlaneGeometry(60, 60);
+            const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 4;
+            worldGroup.add(ceiling);
+
+            // Perimeter Walls
+            createWall(0, -30, 60, 1);
+            createWall(0, 30, 60, 1);
+            createWall(-30, 0, 1, 60);
+            createWall(30, 0, 1, 60);
+
+            // Interior Partitions (Rooms 101, 102, 103 & Emergency & Office)
+            createWall(-10, -10, 1, 40); // Main Corridor Left
+            createWall(10, -10, 1, 40);  // Main Corridor Right
+
+            // Ward Beds Rooms (Left Wing)
+            for(let i = 0; i < 3; i++) {
+                let zPos = -20 + (i * 12);
+                createWall(-20, zPos, 20, 0.8);
+                createBed(-22, zPos + 4, `Room ${101 + i}`);
+            }
+
+            // Registration Counter Glass Box & Desk
+            const deskMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21 });
+            const desk = new THREE.Mesh(new THREE.BoxGeometry(8, 1.2, 2), deskMat);
+            desk.position.set(0, 0.6, 5);
+            worldGroup.add(desk);
+
+            // Registration Computer Monitor
+            const compMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            const comp = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.8), compMat);
+            comp.position.set(-1.5, 1.7, 5);
+            comp.name = "Computer Terminal";
+            comp.userData = { interactable: true, type: "computer" };
+            interactablesGroup.add(comp);
+
+            // Tag Printer Device
+            const printMat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+            const printer = new THREE.Mesh(new THREE.BoxGeometry(1, 0.6, 0.8), printMat);
+            printer.position.set(2, 1.5, 5);
+            printer.name = "ID Tag Printer";
+            printer.userData = { interactable: true, type: "printer" };
+            interactablesGroup.add(printer);
+
+            // Milk Dispenser Station
+            const milkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x112233 });
+            const milkStation = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 1.2), milkMat);
+            milkStation.position.set(6, 1, 6);
+            milkStation.name = "Milk Station";
+            milkStation.userData = { interactable: true, type: "milk" };
+            interactablesGroup.add(milkStation);
+
+            // Supplies Shelf (10 Medicines)
+            buildSupplyShelves();
+
+            // Point Lights along Ceiling Corridor
+            for(let z = -20; z <= 20; z += 10) {
+                const light = new THREE.PointLight(0xffeedd, 0.8, 15);
+                light.position.set(0, 3.8, z);
+                worldGroup.add(light);
+            }
+        }
+
+        function createBed(x, z, roomName) {
+            const bedFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 0.8, 5),
+                new THREE.MeshStandardMaterial({ color: 0x778899 })
+            );
+            bedFrame.position.set(x, 0.4, z);
+
+            const mattress = new THREE.Mesh(
+                new THREE.BoxGeometry(2.8, 0.4, 4.8),
+                new THREE.MeshStandardMaterial({ color: 0xffffff })
+            );
+            mattress.position.set(x, 0.8, z);
+            worldGroup.add(bedFrame);
+            worldGroup.add(mattress);
+
+            // Bed Node Marker for interaction
+            const bedNode = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            bedNode.position.set(x, 1, z);
+            bedNode.name = `${roomName} Bed`;
+            bedNode.userData = { interactable: true, type: "bed", room: roomName, occupied: false };
+            interactablesGroup.add(bedNode);
+        }
+
+        function buildSupplyShelves() {
+            const shelfMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+            const shelf = new THREE.Mesh(new THREE.BoxGeometry(1, 3, 12), shelfMat);
+            shelf.position.set(9, 1.5, -5);
+            worldGroup.add(shelf);
+
+            CONFIG.medicines.forEach((medName, idx) => {
+                const itemGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.5);
+                const itemMat = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
+                const itemMesh = new THREE.Mesh(itemGeo, itemMat);
+                itemMesh.position.set(8.3, 0.6 + ((idx % 4) * 0.7), -9 + (Math.floor(idx / 4) * 3));
+                itemMesh.name = medName;
+                itemMesh.userData = { interactable: true, type: "medicine", medName: medName };
+                interactablesGroup.add(itemMesh);
+            });
+        }
+
+        /* =========================================================================
+           4. PROCEDURAL 3D ANIMAL PATIENT MESH GENERATOR
+           ========================================================================= */
+        function createPatientMesh(speciesType, colorHex, isAnomaly, anomalyType) {
+            const group = new THREE.Group();
+
+            // Base Body
+            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.5 });
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), bodyMat);
+            body.position.y = 1;
+            group.add(body);
+
+            // Head
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), bodyMat);
+            head.position.set(0, 1.8, 0);
+            group.add(head);
+
+            // Ears Procedural Morphing
+            const earMat = bodyMat;
+            if (speciesType === "Rabbit") {
+                const earGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8);
+                const earL = new THREE.Mesh(earGeo, earMat);
+                earL.position.set(-0.2, 2.4, 0);
+                const earR = earL.clone();
+                earR.position.set(0.2, 2.4, 0);
+                group.add(earL, earR);
+            } else if (speciesType === "Cat" || speciesType === "Devil-Cat") {
+                const earGeo = new THREE.ConeGeometry(0.15, 0.4, 4);
+                const earL = new THREE.Mesh(earGeo, earMat);
+                earL.position.set(-0.25, 2.3, 0);
+                const earR = earL.clone();
+                earR.position.set(0.25, 2.3, 0);
+                group.add(earL, earR);
+                if (speciesType === "Devil-Cat") {
+                    const hornMat = new THREE.MeshStandardMaterial({ color: 0xaa2222 });
+                    const hornL = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 4), hornMat);
+                    hornL.position.set(-0.1, 2.3, 0.1);
+                    group.add(hornL);
+                }
+            } else if (speciesType === "Bear" || speciesType === "Dog") {
+                const earGeo = new THREE.SphereGeometry(0.15, 8, 8);
+                const earL = new THREE.Mesh(earGeo, earMat);
+                earL.position.set(-0.35, 2.2, 0);
+                const earR = earL.clone();
+                earR.position.set(0.35, 2.2, 0);
+                group.add(earL, earR);
+            }
+
+            // Uniform Deep Slate Almond Eyes
+            const eyeColor = (isAnomaly && anomalyType === "instant") ? 0xff0000 : 0x111116;
+            const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
+            const eyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
+            
+            const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeL.position.set(-0.18, 1.85, 0.38);
+            const eyeR = eyeL.clone();
+            eyeR.position.set(0.18, 1.85, 0.38);
+            group.add(eyeL, eyeR);
+
+            group.userData = {
+                species: speciesType,
+                color: colorHex,
+                isAnomaly: isAnomaly,
+                anomalyType: anomalyType,
+                eyeMeshL: eyeL,
+                eyeMeshR: eyeR
+            };
+
+            return group;
+        }
+
+        /* =========================================================================
+           5. FIRST-PERSON CONTROLLER & INPUT HANDLING
+           ========================================================================= */
+        const moveState = { forward: false, backward: false, left: false, right: false, run: false };
+        let cameraRotation = { yaw: 0, pitch: 0 };
+        const playerSpeed = 0.1;
+        const playerPos = new THREE.Vector3(0, 1.6, 20);
+
+        // Mouse Look & Pointer Lock
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                cameraRotation.yaw -= e.movementX * 0.002;
+                cameraRotation.pitch -= e.movementY * 0.002;
+                cameraRotation.pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, cameraRotation.pitch));
+                
+                // Don't look up monster penalty check
+                if (cameraRotation.pitch > 0.6 && state.ceilingMonsterActive) {
+                    state.sanity = Math.max(0, state.sanity - 1.5);
+                    updateHUD();
+                }
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (!state.inGame) return;
+            switch(e.code) {
+                case 'KeyW': moveState.forward = true; break;
+                case 'KeyS': moveState.backward = true; break;
+                case 'KeyA': moveState.left = true; break;
+                case 'KeyD': moveState.right = true; break;
+                case 'ShiftLeft': moveState.run = true; break;
+                case 'KeyE': triggerInteraction(); break;
+                case 'KeyF': toggleFlashlight(); break;
+                case 'Digit1': selectSlot(0); break;
+                case 'Digit2': selectSlot(1); break;
+                case 'Digit3': selectSlot(2); break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'KeyW': moveState.forward = false; break;
+                case 'KeyS': moveState.backward = false; break;
+                case 'KeyA': moveState.left = false; break;
+                case 'KeyD': moveState.right = false; break;
+                case 'ShiftLeft': moveState.run = false; break;
+            }
+        });
+
+        function updatePlayerMovement() {
+            if (!state.inGame) return;
+
+            const speed = playerSpeed * (moveState.run ? 1.5 : 1.0);
+            const euler = new THREE.Euler(0, cameraRotation.yaw, 0, 'YXZ');
+            const dir = new THREE.Vector3();
+
+            if (moveState.forward) dir.z -= 1;
+            if (moveState.backward) dir.z += 1;
+            if (moveState.left) dir.x -= 1;
+            if (moveState.right) dir.x += 1;
+
+            dir.normalize();
+            dir.applyEuler(euler);
+            playerPos.addScaledVector(dir, speed);
+
+            // Simple Axis-Aligned Bounding Box Collisions for Hospital Boundaries
+            playerPos.x = Math.max(-28, Math.min(28, playerPos.x));
+            playerPos.z = Math.max(-28, Math.min(28, playerPos.z));
+
+            camera.position.copy(playerPos);
+            camera.rotation.set(cameraRotation.pitch, cameraRotation.yaw, 0, 'YXZ');
+
+            checkRaycastInteractions();
+        }
+
+        /* =========================================================================
+           6. RAYCASTING & OBJECT INTERACTION SYSTEM
+           ========================================================================= */
+        const raycaster = new THREE.Raycaster();
+        let hoveredObject = null;
+
+        function checkRaycastInteractions() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(interactablesGroup.children, true);
+
+            const promptEl = document.getElementById('interaction-prompt');
+
+            if (intersects.length > 0 && intersects[0].distance < 4) {
+                let obj = intersects[0].object;
+                while (obj.parent && obj.parent !== interactablesGroup && !obj.userData.interactable) {
+                    obj = obj.parent;
+                }
+                if (obj.userData && obj.userData.interactable) {
+                    hoveredObject = obj;
+                    promptEl.style.display = 'block';
+                    promptEl.innerText = `Press [E] to interact with ${obj.name}`;
+                    return;
+                }
+            }
+            hoveredObject = null;
+            promptEl.style.display = 'none';
+        }
+
+        function triggerInteraction() {
+            if (!hoveredObject) return;
+
+            const data = hoveredObject.userData;
+            if (data.type === "computer") {
+                openComputerUI();
+            } else if (data.type === "printer") {
+                printPatientTag();
+            } else if (data.type === "milk") {
+                drinkMilk();
+            } else if (data.type === "medicine") {
+                pickupItem(data.medName);
+            } else if (data.type === "bed") {
+                interactWithBed(hoveredObject);
+            }
+        }
+
+        /* =========================================================================
+           7. GAMEPLAY LOGIC & SHIFT MANAGEMENT
+           ========================================================================= */
+        function startNewShift(shiftNum) {
+            state.shift = shiftNum;
+            state.sanity = 100;
+            state.strikes = 3;
+            state.isShiftActive = true;
+            state.inGame = true;
+            state.ceilingMonsterActive = (shiftNum >= 2);
+
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('summary-menu').style.display = 'none';
+            document.body.requestPointerLock();
+
+            updateHUD();
+            spawnNextPatientInQueue();
+        }
+
+        function spawnNextPatientInQueue() {
+            if (patientsGroup.children.length > 0) return;
+
+            const speciesList = ["Rabbit", "Cat", "Dog", "Bear", "Devil-Cat"];
+            const species = speciesList[Math.floor(Math.random() * speciesList.length)];
+            const color = CONFIG.palette[Math.floor(Math.random() * CONFIG.palette.length)];
+            
+            // Anomaly Probabilities
+            const rand = Math.random();
+            let isAnomaly = false;
+            let anomalyType = "none";
+
+            if (state.shift > 1) {
+                if (rand < 0.15) { isAnomaly = true; anomalyType = "cctv"; }
+                else if (rand < 0.25) { isAnomaly = true; anomalyType = "photo"; }
+                else if (rand < 0.30) { isAnomaly = true; anomalyType = "uv"; }
+            }
+
+            const patientMesh = createPatientMesh(species, color, isAnomaly, anomalyType);
+            patientMesh.position.set(0, 0, 8); // At glass window counter
+            patientMesh.rotation.y = Math.PI; // Face player directly
+            patientsGroup.add(patientMesh);
+
+            state.currentPatient = {
+                mesh: patientMesh,
+                name: `Patient #${Math.floor(Math.random() * 899 + 100)}`,
+                requiredMedicines: [
+                    CONFIG.medicines[Math.floor(Math.random() * CONFIG.medicines.length)]
+                ],
+                tagPrinted: false,
+                isAnomaly: isAnomaly,
+                anomalyType: anomalyType
+            };
+
+            setObjective(`Inspect ${state.currentPatient.name} at Registration Desk`);
+        }
+
+        function openComputerUI() {
+            document.exitPointerLock();
+            document.getElementById('pc-interface').style.display = 'flex';
+            
+            // Render eyes in CCTV preview according to anomaly logic
+            const camEyes = document.getElementById('cam-eyes');
+            if (state.currentPatient && state.currentPatient.isAnomaly && state.currentPatient.anomalyType === "cctv") {
+                camEyes.children[0].style.background = '#ff0000';
+                camEyes.children[1].style.background = '#ff0000';
+            } else {
+                camEyes.children[0].style.background = '#000000';
+                camEyes.children[1].style.background = '#000000';
+            }
+        }
+
+        function printPatientTag() {
+            if (!state.currentPatient) return;
+            state.currentPatient.tagPrinted = true;
+            pickupItem(`ID Tag: ${state.currentPatient.name}`);
+            setObjective(`Assign ${state.currentPatient.name} to Ward Room Bed`);
+        }
+
+        function pickupItem(itemName) {
+            for (let i = 0; i < 3; i++) {
+                if (!state.inventory[i]) {
+                    state.inventory[i] = itemName;
+                    updateInventoryUI();
+                    return;
+                }
+            }
+            alert("Inventory Full!");
+        }
+
+        function selectSlot(index) {
+            state.activeSlot = index;
+            updateInventoryUI();
+        }
+
+        function updateInventoryUI() {
+            for (let i = 0; i < 3; i++) {
+                const slot = document.getElementById(`slot-${i}`);
+                slot.innerText = state.inventory[i] ? state.inventory[i] : "Empty";
+                slot.classList.toggle('active', i === state.activeSlot);
+            }
+        }
+
+        function drinkMilk() {
+            if (state.milkCooldown > 0) return;
+            state.sanity = Math.min(100, state.sanity + 25);
+            state.milkCooldown = 35;
+            updateHUD();
+        }
+
+        function interactWithBed(bedMesh) {
+            const heldItem = state.inventory[state.activeSlot];
+            
+            // Assign Patient to Bed
+            if (heldItem && heldItem.startsWith("ID Tag") && state.currentPatient) {
+                state.inventory[state.activeSlot] = null;
+                updateInventoryUI();
+                
+                // Move patient mesh to bed
+                state.currentPatient.mesh.position.set(bedMesh.position.x, 0.8, bedMesh.position.z);
+                state.currentPatient.mesh.rotation.x = -Math.PI / 2; // Lie down
+                bedMesh.userData.occupied = true;
+                bedMesh.userData.patientData = state.currentPatient;
+
+                setObjective(`Administer ${state.currentPatient.requiredMedicines.join(", ")} to ${state.currentPatient.name}`);
+                return;
+            }
+
+            // Deliver Medicine Bedside
+            if (bedMesh.userData.occupied && heldItem) {
+                const patient = bedMesh.userData.patientData;
+                const reqIdx = patient.requiredMedicines.indexOf(heldItem);
+
+                if (reqIdx !== -1) {
+                    // Correct Medicine
+                    patient.requiredMedicines.splice(reqIdx, 1);
+                    state.inventory[state.activeSlot] = null;
+                    updateInventoryUI();
+
+                    if (patient.requiredMedicines.length === 0) {
+                        handlePatientRecovery(patient, bedMesh);
+                    }
+                } else {
+                    // Incorrect Medicine -> Kills Patient
+                    handleSafetyStrike("Administered wrong medicine!");
+                    patientsGroup.remove(patient.mesh);
+                    bedMesh.userData.occupied = false;
+                    setTimeout(spawnNextPatientInQueue, 2000);
+                }
+            }
+        }
+
+        function handlePatientRecovery(patient, bedMesh) {
+            if (patient.isAnomaly) {
+                // Anomaly Awakening Event
+                patient.mesh.userData.eyeMeshL.material.color.setHex(0xff0000);
+                patient.mesh.userData.eyeMeshR.material.color.setHex(0xff0000);
+                
+                setTimeout(() => {
+                    // Attack player sanity
+                    state.sanity = Math.max(0, state.sanity - 35);
+                    updateHUD();
+                    patientsGroup.remove(patient.mesh);
+                    bedMesh.userData.occupied = false;
+                    setTimeout(spawnNextPatientInQueue, 2000);
+                }, 2000);
+            } else {
+                // Normal Patient Leaves Cleanly
+                state.stats.recovered++;
+                setTimeout(() => {
+                    patientsGroup.remove(patient.mesh);
+                    bedMesh.userData.occupied = false;
+                    setTimeout(spawnNextPatientInQueue, 2000);
+                }, 1000);
+            }
+        }
+
+        function handleSafetyStrike(reason) {
+            state.strikes--;
+            state.stats.deaths++;
+            updateHUD();
+
+            if (state.strikes <= 0) {
+                state.isFired = true;
+                state.inGame = false;
+                alert("GAME OVER: You were fired for safety violations!");
+                location.reload();
+            }
+        }
+
+        function toggleFlashlight() {
+            flashlight.visible = !flashlight.visible;
+        }
+
+        function setObjective(text) {
+            state.currentObjective = text;
+            document.getElementById('objective-text').innerText = text;
+        }
+
+        function updateHUD() {
+            document.getElementById('shift-display').innerText = `SHIFT ${state.shift}`;
+            document.getElementById('sanity-bar').style.width = `${state.sanity}%`;
+            
+            let hearts = "";
+            for (let i = 0; i < state.strikes; i++) hearts += "❤️";
+            document.getElementById('strikes-display').innerText = `SAFETY STRIKES: ${hearts}`;
+
+            const warningBanner = document.getElementById('warning-banner');
+            warningBanner.style.display = (state.ceilingMonsterActive && cameraRotation.pitch > 0.4) ? 'block' : 'none';
+        }
+
+        /* =========================================================================
+           8. BUTTON EVENT LISTENERS & UI INTERACTIONS
+           ========================================================================= */
+        document.getElementById('btn-start').addEventListener('click', () => startNewShift(1));
+        document.getElementById('btn-close-pc').addEventListener('click', () => {
+            document.getElementById('pc-interface').style.display = 'none';
+            document.body.requestPointerLock();
+        });
+
+        document.getElementById('btn-take-photo').addEventListener('click', () => {
+            const polView = document.getElementById('polaroid-view');
+            const polEyes = document.querySelectorAll('.pol-eye');
+            
+            if (state.currentPatient && state.currentPatient.isAnomaly && 
+               (state.currentPatient.anomalyType === "photo" || state.currentPatient.anomalyType === "cctv")) {
+                polEyes.forEach(e => e.style.background = '#ff0000');
+            } else {
+                polEyes.forEach(e => e.style.background = '#000000');
+            }
+            polView.style.display = 'flex';
+        });
+
+        document.getElementById('btn-close-pol').addEventListener('click', () => {
+            document.getElementById('polaroid-view').style.display = 'none';
+        });
+
+        document.getElementById('btn-decline-patient').addEventListener('click', () => {
+            if (state.currentPatient) {
+                state.stats.declined++;
+                patientsGroup.remove(state.currentPatient.mesh);
+                state.currentPatient = null;
+                document.getElementById('pc-interface').style.display = 'none';
+                document.body.requestPointerLock();
+                setTimeout(spawnNextPatientInQueue, 2000);
+            }
+        });
+
+        /* =========================================================================
+           9. MAIN GAME LOOP
+           ========================================================================= */
+        let lastTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+
+            if (state.inGame) {
+                updatePlayerMovement();
+
+                // Timers
+                if (state.milkCooldown > 0) state.milkCooldown -= delta;
+                
+                // Slowly decay sanity over time
+                state.sanity = Math.max(0, state.sanity - (delta * 0.5));
+                updateHUD();
+
+                if (state.sanity <= 0 && !state.isFired) {
+                    state.isFired = true;
+                    alert("GAME OVER: You succumbed to insanity!");
+                    location.reload();
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Initialize Map & Start Engine
+        buildHospitalMap();
+        animate();
+
+        // Responsive Resize Handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
